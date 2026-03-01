@@ -146,6 +146,50 @@ export function completeTask(existing: TWTask, keepTags: string[]): boolean {
 }
 
 /**
+ * Look up a TW task by backend name and backend_id.
+ */
+export function findTaskByBackendId(
+  backend: string,
+  backendId: string,
+): TWTask | null {
+  const existing = getExistingTasks(backend);
+  return existing.get(backendId) ?? null;
+}
+
+/**
+ * Start a task via `task start`, with reverse-sync guard to prevent
+ * the on-modify hook from calling back into the backend adapter.
+ */
+export function startTask(uuid: string): boolean {
+  const result = spawnSync(
+    'task',
+    ['rc.confirmation=off', uuid, 'start'],
+    {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, TW_BRIDGE_REVERSE_SYNC: '1' },
+    },
+  );
+  return result.status === 0;
+}
+
+/**
+ * Complete a task via `task done`, with reverse-sync guard.
+ */
+export function doneTask(uuid: string): boolean {
+  const result = spawnSync(
+    'task',
+    ['rc.confirmation=off', uuid, 'done'],
+    {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, TW_BRIDGE_REVERSE_SYNC: '1' },
+    },
+  );
+  return result.status === 0;
+}
+
+/**
  * Update a task's description if it changed.
  */
 export function updateTaskDescription(

@@ -10,6 +10,9 @@ import {
   updateTaskDescription,
   completeTask,
   ensureContext,
+  findTaskByBackendId,
+  startTask,
+  doneTask,
 } from './taskwarrior.js';
 import {
   loadTracking,
@@ -25,6 +28,8 @@ const commands: Record<string, () => Promise<void>> = {
   add: addBackend,
   install,
   sync,
+  start: startCmd,
+  done: doneCmd,
   meeting: meetingCmd,
   timewarrior: timewarriorCmd,
   which,
@@ -40,6 +45,8 @@ async function main() {
     console.log('  add         Add a new backend instance');
     console.log('  install     Install Taskwarrior hooks and shell integration');
     console.log('  sync        Pull tasks from all backends');
+    console.log('  start       Start a task by backend ID (e.g., tw-bridge start ghp#123)');
+    console.log('  done        Complete a task by backend ID (e.g., tw-bridge done ghp#123)');
     console.log('  meeting     Track meetings in Timewarrior (no task created)');
     console.log('  timewarrior Manage Timewarrior integration');
     console.log('  which       Print the context for the current directory');
@@ -547,6 +554,102 @@ async function sync() {
 
   for (const name of backendNames) {
     await syncBackend(name, config.backends[name], config);
+  }
+}
+
+/**
+ * Parse a "backend#id" reference (e.g., "ghp#123").
+ */
+function parseBackendRef(ref: string): { backend: string; id: string } | null {
+  const match = ref.match(/^([^#]+)#(.+)$/);
+  if (!match) return null;
+  return { backend: match[1], id: match[2] };
+}
+
+/**
+ * Look up a TW task by backend ref. If not found, syncs the backend
+ * first in case the task hasn't been pulled yet.
+ */
+async function resolveTaskByRef(ref: { backend: string; id: string }) {
+  const config = loadConfig();
+
+  // Find which backend name uses this adapter type
+  const backendName = Object.keys(config.backends).find(
+    (name) => name === ref.backend || config.backends[name].adapter === ref.backend,
+  );
+
+  if (!backendName) {
+    console.error(`No backend found matching "${ref.backend}".`);
+    console.error(`Configured backends: ${Object.keys(config.backends).join(', ')}`);
+    process.exit(1);
+  }
+
+  // Try direct lookup first
+  let task = findTaskByBackendId(backendName, ref.id);
+
+  if (!task) {
+    // Sync the backend and try again
+    console.log(`Task #${ref.id} not in Taskwarrior yet, syncing ${backendName}...`);
+    await syncBackend(backendName, config.backends[backendName], config);
+    task = findTaskByBackendId(backendName, ref.id);
+  }
+
+  if (!task) {
+    console.error(`Task #${ref.id} not found in backend "${backendName}" after sync.`);
+    process.exit(1);
+  }
+
+  return task;
+}
+
+async function startCmd() {
+  const ref = process.argv[3];
+  if (!ref || ref.startsWith('--')) {
+    console.error('Usage: tw-bridge start <backend>#<id>  (e.g., tw-bridge start ghp#123)');
+    process.exit(1);
+  }
+
+  const parsed = parseBackendRef(ref);
+  if (!parsed) {
+    console.error(`Invalid reference "${ref}". Expected format: backend#id (e.g., ghp#123)`);
+    process.exit(1);
+  }
+
+  const task = await resolveTaskByRef(parsed);
+
+  if (task.start) {
+    console.log(`Task #${parsed.id} is already started (${task.uuid.slice(0, 8)})`);
+    return;
+  }
+
+  if (startTask(task.uuid)) {
+    console.log(`Started: [#${parsed.id}] ${task.description} (${task.uuid.slice(0, 8)})`);
+  } else {
+    console.error(`Failed to start task ${task.uuid}`);
+    process.exit(1);
+  }
+}
+
+async function doneCmd() {
+  const ref = process.argv[3];
+  if (!ref || ref.startsWith('--')) {
+    console.error('Usage: tw-bridge done <backend>#<id>  (e.g., tw-bridge done ghp#123)');
+    process.exit(1);
+  }
+
+  const parsed = parseBackendRef(ref);
+  if (!parsed) {
+    console.error(`Invalid reference "${ref}". Expected format: backend#id (e.g., ghp#123)`);
+    process.exit(1);
+  }
+
+  const task = await resolveTaskByRef(parsed);
+
+  if (doneTask(task.uuid)) {
+    console.log(`Completed: [#${parsed.id}] ${task.description} (${task.uuid.slice(0, 8)})`);
+  } else {
+    console.error(`Failed to complete task ${task.uuid}`);
+    process.exit(1);
   }
 }
 

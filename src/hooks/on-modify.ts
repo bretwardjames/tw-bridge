@@ -197,6 +197,9 @@ async function main() {
       handleTimewarriorStop(config, oldTask);
     }
 
+    // Skip adapter calls during reverse-sync (e.g., tw-bridge start ghp#123)
+    if (process.env.TW_BRIDGE_REVERSE_SYNC) return;
+
     // Route to backend adapter
     const adapter = await resolveAdapter(newTask, config);
     if (!adapter) return;
