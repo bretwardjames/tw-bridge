@@ -18,6 +18,7 @@ const commands: Record<string, () => Promise<void>> = {
   add: addBackend,
   install,
   sync,
+  timewarrior: timewarriorCmd,
   which,
   config: showConfig,
 };
@@ -30,9 +31,10 @@ async function main() {
     console.log('Commands:');
     console.log('  add       Add a new backend instance');
     console.log('  install   Install Taskwarrior hooks and shell integration');
-    console.log('  sync      Pull tasks from all backends');
-    console.log('  which     Print the context for the current directory');
-    console.log('  config    Show current configuration');
+    console.log('  sync        Pull tasks from all backends');
+    console.log('  timewarrior Manage Timewarrior integration');
+    console.log('  which       Print the context for the current directory');
+    console.log('  config      Show current configuration');
     return;
   }
 
@@ -145,16 +147,98 @@ async function install() {
   console.log('urgency.user.tag.ready_for_beta.coefficient=-4.0');
   console.log('urgency.user.tag.in_beta.coefficient=-6.0');
 
-  // Check for conflicting timewarrior hook
-  const timewHook = path.join(HOOKS_DIR, 'on-modify.timewarrior');
-  if (fs.existsSync(timewHook)) {
-    console.log('\nNote: Found on-modify.timewarrior hook.');
-    console.log('If you enable tw-bridge Timewarrior management, disable it to avoid double-tracking:');
-    console.log(`  mv ${timewHook} ${timewHook}.disabled`);
+  // Timewarrior hint
+  if (fs.existsSync(STANDARD_TIMEW_HOOK)) {
+    console.log('\nTimewarrior hook detected. To enable tw-bridge time tracking:');
+    console.log('  tw-bridge timewarrior enable-overlaps');
   }
 
   // Install shell integration
   installShellFunction();
+}
+
+const STANDARD_TIMEW_HOOK = path.join(HOOKS_DIR, 'on-modify.timewarrior');
+
+async function timewarriorCmd() {
+  const sub = process.argv[3];
+
+  if (!sub || sub === '--help') {
+    console.log('Usage: tw-bridge timewarrior <subcommand>\n');
+    console.log('Subcommands:');
+    console.log('  enable           Enable Timewarrior tracking');
+    console.log('  enable-overlaps  Enable with overlapping intervals (for parallel work)');
+    console.log('  disable          Disable Timewarrior tracking');
+    console.log('  status           Show current Timewarrior configuration');
+    return;
+  }
+
+  const config = loadConfig();
+
+  if (sub === 'status') {
+    const tw = config.timewarrior;
+    if (!tw?.enabled) {
+      console.log('Timewarrior: disabled');
+    } else {
+      console.log(`Timewarrior: enabled (overlaps: ${tw.allow_overlaps ? 'yes' : 'no'})`);
+    }
+    const hookExists = fs.existsSync(STANDARD_TIMEW_HOOK);
+    const hookDisabled = fs.existsSync(STANDARD_TIMEW_HOOK + '.disabled');
+    if (hookExists) {
+      console.log(`Standard hook: active (${STANDARD_TIMEW_HOOK})`);
+      if (tw?.enabled) {
+        console.log('  Warning: may cause double-tracking. Run `tw-bridge timewarrior enable` to fix.');
+      }
+    } else if (hookDisabled) {
+      console.log('Standard hook: disabled');
+    } else {
+      console.log('Standard hook: not found');
+    }
+    return;
+  }
+
+  if (sub === 'enable' || sub === 'enable-overlaps') {
+    const allowOverlaps = sub === 'enable-overlaps';
+
+    config.timewarrior = {
+      enabled: true,
+      allow_overlaps: allowOverlaps,
+    };
+    const configPath = saveConfig(config);
+    console.log(`Timewarrior tracking enabled (overlaps: ${allowOverlaps ? 'yes' : 'no'})`);
+    console.log(`Config: ${configPath}`);
+
+    // Disable the standard hook to avoid double-tracking
+    if (fs.existsSync(STANDARD_TIMEW_HOOK)) {
+      const disabled = STANDARD_TIMEW_HOOK + '.disabled';
+      fs.renameSync(STANDARD_TIMEW_HOOK, disabled);
+      console.log(`\nDisabled standard hook: ${STANDARD_TIMEW_HOOK} -> .disabled`);
+      console.log('tw-bridge will handle Timewarrior tracking directly.');
+    }
+
+    return;
+  }
+
+  if (sub === 'disable') {
+    config.timewarrior = {
+      enabled: false,
+      allow_overlaps: false,
+    };
+    const configPath = saveConfig(config);
+    console.log('Timewarrior tracking disabled');
+    console.log(`Config: ${configPath}`);
+
+    // Re-enable the standard hook if it was disabled
+    const disabled = STANDARD_TIMEW_HOOK + '.disabled';
+    if (fs.existsSync(disabled)) {
+      fs.renameSync(disabled, STANDARD_TIMEW_HOOK);
+      console.log(`\nRestored standard hook: ${STANDARD_TIMEW_HOOK}`);
+    }
+
+    return;
+  }
+
+  console.error(`Unknown subcommand: ${sub}`);
+  process.exit(1);
 }
 
 const SHELL_FUNCTION = `
