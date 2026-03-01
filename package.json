@@ -1,0 +1,19 @@
+{
+  "name": "tw-bridge",
+  "version": "0.1.0",
+  "description": "Taskwarrior backend bridge — unified sync and hooks for multiple task management platforms",
+  "type": "module",
+  "bin": {
+    "tw-bridge": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "install-hooks": "tw-bridge install"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0"
+  }
+}

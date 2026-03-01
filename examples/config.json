@@ -1,0 +1,14 @@
+{
+  "backends": {
+    "ghp": {
+      "adapter": "ghp",
+      "match": {
+        "tags": ["ghp"]
+      },
+      "config": {
+        "cwd": "/home/bretwardjames/IdeaProjects/ghp",
+        "project": "ghp"
+      }
+    }
+  }
+}
