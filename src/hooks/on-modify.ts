@@ -1,40 +1,15 @@
 import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { loadConfig } from '../config.js';
 import { resolveAdapter } from '../registry.js';
+import {
+  loadTracking,
+  saveTracking,
+  mergedTags,
+  getCurrentInterval,
+  type TimewInterval,
+} from '../tracking.js';
 import type { TWTask, BridgeConfig } from '../types.js';
-
-// --- Tracking state ---
-// Tracks which tasks are currently "active" so we can compute merged tags
-// and know which tags to remove on stop.
-
-const TRACKING_FILE = path.join(os.homedir(), '.config', 'tw-bridge', 'tracking.json');
-
-/** Map of taskKey -> tags for that task */
-type TrackingState = Record<string, string[]>;
-
-function loadTracking(): TrackingState {
-  try {
-    return JSON.parse(fs.readFileSync(TRACKING_FILE, 'utf-8'));
-  } catch {
-    return {};
-  }
-}
-
-function saveTracking(state: TrackingState) {
-  fs.mkdirSync(path.dirname(TRACKING_FILE), { recursive: true });
-  fs.writeFileSync(TRACKING_FILE, JSON.stringify(state));
-}
-
-function mergedTags(state: TrackingState): string[] {
-  const all = new Set<string>();
-  for (const tags of Object.values(state)) {
-    for (const tag of tags) all.add(tag);
-  }
-  return [...all];
-}
 
 // --- Timewarrior helpers ---
 
@@ -51,27 +26,6 @@ function timewTags(task: TWTask): string[] {
 
 function taskKey(task: TWTask): string {
   return task.backend_id ? `#${task.backend_id}` : task.uuid;
-}
-
-interface TimewInterval {
-  start: string;
-  end?: string;
-  tags: string[];
-}
-
-function getCurrentInterval(): TimewInterval | null {
-  const result = spawnSync('timew', ['export'], {
-    encoding: 'utf-8',
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
-  if (result.status !== 0 || !result.stdout?.trim()) return null;
-
-  try {
-    const intervals: TimewInterval[] = JSON.parse(result.stdout);
-    return intervals.find((iv) => !iv.end) ?? null;
-  } catch {
-    return null;
-  }
 }
 
 function formatDuration(isoStart: string): string {

@@ -1,6 +1,6 @@
 {
   "name": "@bretwardjames/tw-bridge",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Taskwarrior backend bridge — unified sync and hooks for multiple task management platforms",
   "type": "module",
   "license": "MIT",
