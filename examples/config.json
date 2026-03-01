@@ -1,4 +1,8 @@
 {
+  "timewarrior": {
+    "enabled": true,
+    "allow_overlaps": true
+  },
   "backends": {
     "ghp": {
       "adapter": "ghp",
@@ -6,7 +10,7 @@
         "tags": ["ghp"]
       },
       "config": {
-        "cwd": "/home/bretwardjames/IdeaProjects/ghp",
+        "cwd": "/path/to/your/repo",
         "project": "ghp"
       }
     }

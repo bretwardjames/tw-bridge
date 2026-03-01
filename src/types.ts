@@ -41,8 +41,17 @@ export interface MatchRule {
   project?: string;
 }
 
+export interface TimewarriorConfig {
+  /** Enable tw-bridge Timewarrior management. Defaults to false. */
+  enabled?: boolean;
+  /** Allow overlapping time intervals for parallel work. Defaults to false. */
+  allow_overlaps?: boolean;
+}
+
 export interface BridgeConfig {
   /** Context to use when cwd doesn't match any backend. Omit for no context. */
   default_context?: string;
+  /** Timewarrior integration settings */
+  timewarrior?: TimewarriorConfig;
   backends: Record<string, BackendConfig>;
 }

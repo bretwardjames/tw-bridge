@@ -145,6 +145,14 @@ async function install() {
   console.log('urgency.user.tag.ready_for_beta.coefficient=-4.0');
   console.log('urgency.user.tag.in_beta.coefficient=-6.0');
 
+  // Check for conflicting timewarrior hook
+  const timewHook = path.join(HOOKS_DIR, 'on-modify.timewarrior');
+  if (fs.existsSync(timewHook)) {
+    console.log('\nNote: Found on-modify.timewarrior hook.');
+    console.log('If you enable tw-bridge Timewarrior management, disable it to avoid double-tracking:');
+    console.log(`  mv ${timewHook} ${timewHook}.disabled`);
+  }
+
   // Install shell integration
   installShellFunction();
 }
