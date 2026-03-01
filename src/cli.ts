@@ -85,16 +85,32 @@ async function addBackend() {
 
   const matchTag = tagOverride ?? name;
   const cwd = process.cwd();
-  const adapterConfig = adapter.defaultConfig(cwd);
+
+  // Use interactive setup if the adapter provides it, otherwise default config
+  const adapterConfig = adapter.setup
+    ? await adapter.setup(cwd)
+    : adapter.defaultConfig(cwd);
+
+  // Derive done_statuses from adapter config (e.g., Asana section mappings)
+  let doneStatuses: string[] | undefined;
+  const sections = adapterConfig.sections as Array<{ gid: string; tag: string }> | undefined;
+  const doneSectionGids = adapterConfig.done_sections as string[] | undefined;
+  if (sections?.length && doneSectionGids?.length) {
+    const gidSet = new Set(doneSectionGids);
+    doneStatuses = sections
+      .filter((s) => gidSet.has(s.gid))
+      .map((s) => s.tag);
+  }
 
   config.backends[name] = {
     adapter: adapterType,
     match: { tags: [matchTag] },
+    ...(doneStatuses?.length && { done_statuses: doneStatuses }),
     config: adapterConfig,
   };
 
   const configPath = saveConfig(config);
-  console.log(`Added backend "${name}" (adapter: ${adapterType})`);
+  console.log(`\nAdded backend "${name}" (adapter: ${adapterType})`);
   console.log(`Config: ${configPath}`);
   console.log(`Match tag: +${matchTag}`);
 
@@ -465,6 +481,15 @@ async function syncBackend(
     } else if (isDone) {
       // Existing task moved to a done status — complete it
       if (completeTask(existingTask, matchTags)) {
+        // Push completion back to the backend so it doesn't reappear
+        if (adapter.onDone) {
+          try {
+            await adapter.onDone(task);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`  ⚠ [#${backendId}] failed to push completion: ${msg}`);
+          }
+        }
         console.log(`  ✓ [#${backendId}] ${task.description}`);
         completed++;
       }

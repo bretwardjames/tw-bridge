@@ -1,9 +1,11 @@
 import type { Adapter } from './adapter.js';
 import type { TWTask, BackendConfig, BridgeConfig } from './types.js';
 import { GhpAdapter } from './adapters/ghp.js';
+import { AsanaAdapter } from './adapters/asana.js';
 
 const BUILTIN_ADAPTERS: Record<string, () => Adapter> = {
   ghp: () => new GhpAdapter(),
+  asana: () => new AsanaAdapter(),
 };
 
 /**

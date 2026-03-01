@@ -19,6 +19,13 @@ export interface Adapter {
    */
   defaultConfig(cwd: string): AdapterConfig;
 
+  /**
+   * Interactive setup flow. Called during `tw-bridge add` if present.
+   * Can prompt the user, authenticate with APIs, discover resources, etc.
+   * Returns the adapter config to save.
+   */
+  setup?(cwd: string): Promise<AdapterConfig>;
+
   /** Pull tasks from the backend into Taskwarrior */
   pull(): Promise<TWTask[]>;
 

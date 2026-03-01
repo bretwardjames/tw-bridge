@@ -31,6 +31,6 @@ export function loadConfig(): BridgeConfig {
 export function saveConfig(config: BridgeConfig): string {
   const configPath = findConfigPath() ?? CONFIG_PATHS[0];
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
   return configPath;
 }
