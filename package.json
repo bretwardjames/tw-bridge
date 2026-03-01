@@ -1,15 +1,31 @@
 {
-  "name": "tw-bridge",
+  "name": "@bretwardjames/tw-bridge",
   "version": "0.1.0",
   "description": "Taskwarrior backend bridge — unified sync and hooks for multiple task management platforms",
   "type": "module",
-  "bin": {
-    "tw-bridge": "./dist/cli.js"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bretwardjames/tw-bridge.git"
   },
+  "keywords": [
+    "taskwarrior",
+    "timewarrior",
+    "task-management",
+    "github-projects",
+    "sync"
+  ],
+  "bin": {
+    "tw-bridge": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "examples"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "install-hooks": "tw-bridge install"
+    "prepublishOnly": "npm run build"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
