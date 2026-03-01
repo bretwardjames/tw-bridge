@@ -44,8 +44,6 @@ export interface MatchRule {
 export interface TimewarriorConfig {
   /** Enable tw-bridge Timewarrior management. Defaults to false. */
   enabled?: boolean;
-  /** Allow overlapping time intervals for parallel work. Defaults to false. */
-  allow_overlaps?: boolean;
 }
 
 export interface BridgeConfig {

@@ -151,9 +151,14 @@ export class GhpAdapter implements Adapter {
       return;
     }
 
-    process.stderr.write(`tw-bridge [ghp]: starting issue #${issueNumber}\n`);
+    const parallel = process.env.TW_BRIDGE_MODE === 'parallel';
+    const args = parallel
+      ? ['start', issueNumber, '--parallel']
+      : ['start', issueNumber];
 
-    const result = spawnSync('ghp', ['start', issueNumber], {
+    process.stderr.write(`tw-bridge [ghp]: starting issue #${issueNumber}${parallel ? ' (parallel)' : ''}\n`);
+
+    const result = spawnSync('ghp', args, {
       cwd: this.config.cwd,
       stdio: [ttyFd, ttyFd, ttyFd],
     });

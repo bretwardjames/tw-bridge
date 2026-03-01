@@ -147,14 +147,40 @@ async function install() {
   console.log('urgency.user.tag.ready_for_beta.coefficient=-4.0');
   console.log('urgency.user.tag.in_beta.coefficient=-6.0');
 
+  // Install Timewarrior extension
+  installTimewExtension();
+
   // Timewarrior hint
   if (fs.existsSync(STANDARD_TIMEW_HOOK)) {
     console.log('\nTimewarrior hook detected. To enable tw-bridge time tracking:');
-    console.log('  tw-bridge timewarrior enable-overlaps');
+    console.log('  tw-bridge timewarrior enable');
   }
 
   // Install shell integration
   installShellFunction();
+}
+
+const TIMEW_EXT_DIR = path.join(os.homedir(), '.timewarrior', 'extensions');
+
+function installTimewExtension() {
+  fs.mkdirSync(TIMEW_EXT_DIR, { recursive: true });
+
+  const extSource = path.resolve(
+    path.dirname(new URL(import.meta.url).pathname),
+    'extensions',
+    'bridge.js',
+  );
+  const extTarget = path.join(TIMEW_EXT_DIR, 'bridge');
+
+  if (fs.existsSync(extTarget)) {
+    fs.unlinkSync(extTarget);
+  }
+
+  fs.symlinkSync(extSource, extTarget);
+  fs.chmodSync(extSource, 0o755);
+
+  console.log(`\nInstalled Timewarrior extension: ${extTarget} -> ${extSource}`);
+  console.log('  Usage: timew bridge [task-time|wall-time] [project-filter]');
 }
 
 const STANDARD_TIMEW_HOOK = path.join(HOOKS_DIR, 'on-modify.timewarrior');
@@ -165,10 +191,12 @@ async function timewarriorCmd() {
   if (!sub || sub === '--help') {
     console.log('Usage: tw-bridge timewarrior <subcommand>\n');
     console.log('Subcommands:');
-    console.log('  enable           Enable Timewarrior tracking');
-    console.log('  enable-overlaps  Enable with overlapping intervals (for parallel work)');
-    console.log('  disable          Disable Timewarrior tracking');
-    console.log('  status           Show current Timewarrior configuration');
+    console.log('  enable   Enable Timewarrior tracking');
+    console.log('  disable  Disable Timewarrior tracking');
+    console.log('  status   Show current Timewarrior configuration');
+    console.log('\nParallel time tracking is controlled per-invocation:');
+    console.log('  task start <id> --parallel   Track in parallel with current task');
+    console.log('  task start <id> --switch     Stop current task, start new one');
     return;
   }
 
@@ -179,7 +207,8 @@ async function timewarriorCmd() {
     if (!tw?.enabled) {
       console.log('Timewarrior: disabled');
     } else {
-      console.log(`Timewarrior: enabled (overlaps: ${tw.allow_overlaps ? 'yes' : 'no'})`);
+      console.log('Timewarrior: enabled');
+      console.log('  Parallel tracking: use `task start <id> --parallel`');
     }
     const hookExists = fs.existsSync(STANDARD_TIMEW_HOOK);
     const hookDisabled = fs.existsSync(STANDARD_TIMEW_HOOK + '.disabled');
@@ -196,15 +225,10 @@ async function timewarriorCmd() {
     return;
   }
 
-  if (sub === 'enable' || sub === 'enable-overlaps') {
-    const allowOverlaps = sub === 'enable-overlaps';
-
-    config.timewarrior = {
-      enabled: true,
-      allow_overlaps: allowOverlaps,
-    };
+  if (sub === 'enable') {
+    config.timewarrior = { enabled: true };
     const configPath = saveConfig(config);
-    console.log(`Timewarrior tracking enabled (overlaps: ${allowOverlaps ? 'yes' : 'no'})`);
+    console.log('Timewarrior tracking enabled');
     console.log(`Config: ${configPath}`);
 
     // Disable the standard hook to avoid double-tracking
@@ -219,10 +243,7 @@ async function timewarriorCmd() {
   }
 
   if (sub === 'disable') {
-    config.timewarrior = {
-      enabled: false,
-      allow_overlaps: false,
-    };
+    config.timewarrior = { enabled: false };
     const configPath = saveConfig(config);
     console.log('Timewarrior tracking disabled');
     console.log(`Config: ${configPath}`);
@@ -244,13 +265,19 @@ async function timewarriorCmd() {
 const SHELL_FUNCTION = `
 # tw-bridge: auto-context task wrapper
 task() {
-  local ctx
+  local ctx mode=""
+  local args=()
+
+  for arg in "$@"; do
+    case "$arg" in
+      --parallel|-p) mode="parallel" ;;
+      --switch|-s)   mode="switch" ;;
+      *)             args+=("$arg") ;;
+    esac
+  done
+
   ctx=$(tw-bridge which 2>/dev/null)
-  if [ -n "$ctx" ]; then
-    command task "rc.context=$ctx" "$@"
-  else
-    command task "$@"
-  fi
+  TW_BRIDGE_MODE="$mode" command task \${ctx:+"rc.context=$ctx"} "\${args[@]}"
 }
 `.trim();
 

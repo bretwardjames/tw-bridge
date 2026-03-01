@@ -5,6 +5,7 @@ export default defineConfig([
     entry: {
       cli: 'src/cli.ts',
       'hooks/on-modify': 'src/hooks/on-modify.ts',
+      'extensions/bridge': 'src/extensions/bridge.ts',
     },
     format: ['esm'],
     target: 'node22',
