@@ -569,17 +569,41 @@ function parseBackendRef(ref: string): { backend: string; id: string } | null {
 /**
  * Look up a TW task by backend ref. If not found, syncs the backend
  * first in case the task hasn't been pulled yet.
+ * Uses --repo owner/name to disambiguate when multiple backends share an adapter type.
  */
 async function resolveTaskByRef(ref: { backend: string; id: string }) {
   const config = loadConfig();
+  const repo = parseFlag('--repo');
 
-  // Find which backend name uses this adapter type
-  const backendName = Object.keys(config.backends).find(
-    (name) => name === ref.backend || config.backends[name].adapter === ref.backend,
-  );
+  // Find which backend name matches
+  let backendName: string | undefined;
+
+  if (repo) {
+    // Extract repo name from "owner/repo" format
+    const repoName = repo.includes('/') ? repo.split('/').pop()! : repo;
+
+    // Match by adapter type + repo name against project or cwd basename
+    backendName = Object.keys(config.backends).find((name) => {
+      const b = config.backends[name];
+      if (b.adapter !== ref.backend && name !== ref.backend) return false;
+      const project = b.config?.project as string | undefined;
+      const cwdBase = b.config?.cwd ? path.basename(b.config.cwd as string) : undefined;
+      return (
+        project?.toLowerCase() === repoName.toLowerCase() ||
+        cwdBase?.toLowerCase() === repoName.toLowerCase()
+      );
+    });
+  }
+
+  // Fall back to name or adapter match (original behavior)
+  if (!backendName) {
+    backendName = Object.keys(config.backends).find(
+      (name) => name === ref.backend || config.backends[name].adapter === ref.backend,
+    );
+  }
 
   if (!backendName) {
-    console.error(`No backend found matching "${ref.backend}".`);
+    console.error(`No backend found matching "${ref.backend}"${repo ? ` for repo "${repo}"` : ''}.`);
     console.error(`Configured backends: ${Object.keys(config.backends).join(', ')}`);
     process.exit(1);
   }
