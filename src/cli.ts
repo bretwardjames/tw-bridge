@@ -20,6 +20,7 @@ import {
   startSwitch,
   stopEntry,
   getActiveMeetings,
+  getActiveEntries,
 } from './tracking.js';
 
 const HOOKS_DIR = path.join(os.homedir(), '.task', 'hooks');
@@ -30,6 +31,7 @@ const commands: Record<string, () => Promise<void>> = {
   sync,
   start: startCmd,
   done: doneCmd,
+  track: trackCmd,
   meeting: meetingCmd,
   timewarrior: timewarriorCmd,
   which,
@@ -47,7 +49,8 @@ async function main() {
     console.log('  sync        Pull tasks from all backends');
     console.log('  start       Start a task by backend ID (e.g., tw-bridge start ghp#123)');
     console.log('  done        Complete a task by backend ID (e.g., tw-bridge done ghp#123)');
-    console.log('  meeting     Track meetings in Timewarrior (no task created)');
+    console.log('  track       Track non-task time (e.g., tw-bridge track emails --project ghp)');
+    console.log('  meeting     Track meetings (alias for: track start <name> --type meeting)');
     console.log('  timewarrior Manage Timewarrior integration');
     console.log('  which       Print the context for the current directory');
     console.log('  config      Show current configuration');
@@ -213,6 +216,125 @@ function installTimewExtension() {
 
   console.log(`\nInstalled Timewarrior extension: ${extTarget} -> ${extSource}`);
   console.log('  Usage: timew bridge [task-time|wall-time] [project-filter]');
+}
+
+// --- Non-task time tracking ---
+
+function sanitizeName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+async function trackCmd() {
+  const sub = process.argv[3];
+
+  if (!sub || sub === '--help') {
+    console.log('Usage: tw-bridge track <subcommand>\n');
+    console.log('Subcommands:');
+    console.log('  start <activity> [--project <tag>] [--switch]  Start tracking an activity');
+    console.log('  stop [activity]                                Stop an activity (or all if no name)');
+    console.log('  list                                           Show active non-task tracking');
+    console.log('\nActivities are tracked in Timewarrior only — no Taskwarrior task is created.');
+    console.log('By default, activities run in parallel with active tasks.');
+    console.log('Use --switch to pause active tasks instead.');
+    console.log('\nExamples:');
+    console.log('  tw-bridge track start emails --project ghp');
+    console.log('  tw-bridge track start comms');
+    console.log('  tw-bridge track stop emails');
+    return;
+  }
+
+  const config = loadConfig();
+  if (!config.timewarrior?.enabled) {
+    console.error('Timewarrior is not enabled. Run: tw-bridge timewarrior enable');
+    process.exit(1);
+  }
+
+  if (sub === 'start') {
+    const switchMode = process.argv.includes('--switch') || process.argv.includes('-s');
+    const projectFlag = parseFlag('--project');
+
+    // Collect name args, skipping flags and their values
+    const nameArgs: string[] = [];
+    const args = process.argv.slice(4);
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === '--project') { i++; continue; }
+      if (args[i].startsWith('--') || args[i] === '-s') continue;
+      nameArgs.push(args[i]);
+    }
+    const nameArg = nameArgs.join(' ');
+    if (!nameArg) {
+      console.error('Usage: tw-bridge track start <activity>');
+      process.exit(1);
+    }
+    const tag = sanitizeName(nameArg);
+    const key = `track:${tag}`;
+    const tags = [tag];
+
+    // Add project from --project flag, or auto-detect from cwd
+    const project = projectFlag ?? detectProjectContext();
+    if (project) tags.push(project);
+
+    if (switchMode) {
+      startSwitch(key, tags);
+    } else {
+      startParallel(key, tags);
+    }
+
+    console.log(`Tracking: ${nameArg}`);
+    console.log(`  Tags: ${tags.join(' ')}`);
+    if (!switchMode) {
+      console.log('  Mode: parallel (active tasks continue tracking)');
+    } else {
+      console.log('  Mode: switch (active tasks paused)');
+    }
+    return;
+  }
+
+  if (sub === 'stop') {
+    const nameArg = process.argv.slice(4).join(' ').trim();
+    const active = getActiveEntries('track:');
+
+    if (active.length === 0) {
+      console.log('No active tracking.');
+      return;
+    }
+
+    if (nameArg) {
+      const tag = sanitizeName(nameArg);
+      const key = `track:${tag}`;
+      const match = active.find((m) => m.key === key);
+      if (!match) {
+        console.error(`No active tracking matching "${nameArg}".`);
+        console.error(`Active: ${active.map((m) => m.key.replace('track:', '')).join(', ')}`);
+        process.exit(1);
+      }
+      stopEntry(key);
+      console.log(`Stopped tracking: ${nameArg}`);
+    } else {
+      for (const m of active) {
+        stopEntry(m.key);
+      }
+      console.log(`Stopped ${active.length} activity(s): ${active.map((m) => m.key.replace('track:', '')).join(', ')}`);
+    }
+    return;
+  }
+
+  if (sub === 'list') {
+    const active = getActiveEntries('track:');
+    if (active.length === 0) {
+      console.log('No active tracking.');
+      return;
+    }
+    console.log('Active tracking:');
+    for (const m of active) {
+      const name = m.key.replace('track:', '');
+      console.log(`  ${name}  (${m.tags.join(' ')})`);
+    }
+    return;
+  }
+
+  console.error(`Unknown subcommand: ${sub}`);
+  process.exit(1);
 }
 
 // --- Meeting tracking ---

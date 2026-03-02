@@ -81,10 +81,15 @@ export function stopEntry(key: string) {
   }
 }
 
-/** Get all active meeting keys from tracking state */
-export function getActiveMeetings(): Array<{ key: string; tags: string[] }> {
+/** Get active entries matching a key prefix */
+export function getActiveEntries(prefix: string): Array<{ key: string; tags: string[] }> {
   const tracking = loadTracking();
   return Object.entries(tracking)
-    .filter(([key]) => key.startsWith('meeting:'))
+    .filter(([key]) => key.startsWith(prefix))
     .map(([key, tags]) => ({ key, tags }));
+}
+
+/** Get all active meeting keys from tracking state */
+export function getActiveMeetings(): Array<{ key: string; tags: string[] }> {
+  return getActiveEntries('meeting:');
 }
